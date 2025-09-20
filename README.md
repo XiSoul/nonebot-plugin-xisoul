@@ -12,6 +12,7 @@ NoneBot 插件：提供农历黄历信息和实时新闻图片功能
 - 📰 获取实时热榜新闻图片
 - ⏰ 支持定时发送新闻图片到指定群聊
 - 💾 支持本地缓存，避免频繁调用API
+- 更多功能更新中~~~
 
 ## 安装
 
@@ -24,6 +25,8 @@ pip install nonebot-plugin-xisoul
 ```
 
 ## 配置项
+
+api网址：!(https://api.shwgij.com/)[https://api.shwgij.com/user/register?cps=0vr22dJY]
 
 在 `.env.prod` 文件中添加以下配置：
 
