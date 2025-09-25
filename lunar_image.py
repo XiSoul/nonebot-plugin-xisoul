@@ -1,7 +1,8 @@
 import os
 import asyncio
+import os  # 需要导入os模块用于创建目录
 from datetime import datetime
-from nonebot import on_command, logger
+from nonebot import on_command, on_message, logger
 from nonebot.adapters.onebot.v11 import Bot, Event, MessageSegment
 from nonebot.plugin import PluginMetadata
 from nonebot import require
@@ -10,14 +11,22 @@ from nonebot import require
 require("nonebot_plugin_htmlrender")
 from nonebot_plugin_htmlrender import get_new_page
 
+# 定义图片黄历规则
+async def is_image_lunar_command(event: Event) -> bool:
+    message = str(event.message).strip()
+    return message == "黄历"
+
 __plugin_meta__ = PluginMetadata(
     name="黄历",
     description="获取当天的黄历网页截图",
-    usage="/黄历 获取网页截图版",
+    usage="黄历 获取网页截图版",
 )
 
 # 命令定义
+# 保留原有的命令以便兼容
 image_lunar = on_command("黄历", priority=10, block=True)
+# 添加新的不需要/的命令
+image_lunar_direct = on_message(rule=is_image_lunar_command, priority=10, block=True)
 
 def create_temp_directory(temp_dir="temp"):
     """创建临时文件目录"""
@@ -31,6 +40,7 @@ def generate_unique_filename(temp_dir="temp", prefix="huangli_", ext=".png"):
     return os.path.join(temp_dir, f"{prefix}{timestamp}{ext}")
 
 @image_lunar.handle()
+@image_lunar_direct.handle()
 async def handle_image_lunar(bot: Bot, event: Event):
     """处理图片黄历命令"""
     logger.info("收到图片黄历命令请求")

@@ -25,8 +25,8 @@ pip install nonebot-plugin-xisoul
 ```
 
 ## 配置项
-
-api网址：!(https://api.shwgij.com/)[https://api.shwgij.com/user/register?cps=0vr22dJY]
+**可能会有多个网站的APIKEY所以通过网站名字命名**
+SHWGIJapi网址:[https://api.shwgij.com/](https://api.shwgij.com/user/register?cps=0vr22dJY)
 
 在 `.env.prod` 文件中添加以下配置：
 
@@ -35,6 +35,7 @@ api网址：!(https://api.shwgij.com/)[https://api.shwgij.com/user/register?cps=
 LUNAR_CALENDAR_API_KEY="您的API密钥"
 
 # 新闻API配置
+# 新闻更多配置请直接参考官方文档，如果你的配置获取不到API可以自行下载插件用AI帮你修改代码
 SHWGIJ_API_KEY="您的新闻API密钥"
 
 # 定时任务配置

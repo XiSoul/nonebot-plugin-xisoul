@@ -1,14 +1,20 @@
 import httpx
 import json
 from datetime import datetime
-from nonebot import on_command, get_driver, logger
+from nonebot import on_command, on_message, get_driver, logger
 from nonebot.adapters.onebot.v11 import Bot, Event
 from nonebot.plugin import PluginMetadata
+from nonebot.rule import Rule, CommandRule
+
+# 定义文本黄历规则
+async def is_text_lunar_command(event: Event) -> bool:
+    message = str(event.message).strip()
+    return message == "文字黄历" or message == "文本黄历"
 
 __plugin_meta__ = PluginMetadata(
     name="文本黄历",
     description="获取当天的农历黄历文本信息，包含详细的传统命理和民俗数据",
-    usage="/黄历 或 @机器人 黄历 获取文本版",
+    usage="文字黄历 或 文本黄历 获取文本版",
 )
 
 # 从环境变量获取配置
@@ -17,13 +23,17 @@ config = get_driver().config
 get_lunar_key = getattr(config, "shwgij_api_key", "")
 
 # 命令定义
+# 保留原有的命令以便兼容
 lunar_calendar = on_command("文字黄历", priority=10, block=True)
+# 添加新的不需要/的命令
+lunar_calendar_direct = on_message(rule=is_text_lunar_command, priority=10, block=True)
 
 def get_current_date():
     """获取当前日期的格式化字符串"""
     return datetime.now().strftime("%Y-%m-%d")
 
 @lunar_calendar.handle()
+@lunar_calendar_direct.handle()
 async def handle_lunar_calendar(bot: Bot, event: Event):
     """处理文本黄历命令"""
     logger.info("收到文本黄历命令请求")
