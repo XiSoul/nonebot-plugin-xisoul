@@ -4,7 +4,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![NoneBot Version](https://img.shields.io/badge/nonebot-2.0.0+-green.svg)](https://github.com/nonebot/nonebot2)
 
-NoneBot 插件：提供农历黄历信息和实时新闻图片功能
+NoneBot 插件：提供农历黄历信息和实时新闻图片功能，以及Ollama对话功能
 
 ## 功能介绍
 
@@ -12,7 +12,8 @@ NoneBot 插件：提供农历黄历信息和实时新闻图片功能
 - 📰 获取实时热榜新闻图片
 - ⏰ 支持定时发送新闻图片到指定群聊
 - 💾 支持本地缓存，避免频繁调用API
-- 更多功能更新中~~~
+- 💬 集成Ollama对话功能（需要单独安装依赖）
+- 更多功能更新中~~~ 🌱
 
 ## 安装
 
@@ -24,8 +25,20 @@ nb plugin install nonebot-plugin-xisoul
 pip install nonebot-plugin-xisoul
 ```
 
+## 依赖说明
+
+### 核心依赖（自动安装）
+- `nonebot2>=2.0.0` - 插件基础框架
+- `nonebot-adapter-onebot>=2.3.0` - OneBot协议适配器
+- `nonebot-plugin-apscheduler>=0.1.2` - 定时任务支持
+- `httpx>=0.23.0` - HTTP请求客户端
+
+### 可选依赖（需要手动安装）
+- **网页渲染依赖**：`nonebot-plugin-htmlrender` - 用于生成黄历图片（可通过 `nb plugin install nonebot-plugin-htmlrender` 安装）
+- **Ollama对话依赖**：`ollama` - 用于Ollama聊天功能（可通过 `pip install ollama` 安装）
+
 ## 配置项
-**可能会有多个网站的APIKEY所以通过网站名字命名**
+**可能会有多个网站的APIKEY所以通过网站名字命名** 
 SHWGIJapi网址:[https://api.shwgij.com/](https://api.shwgij.com/user/register?cps=0vr22dJY)
 
 在 `.env.prod` 文件中添加以下配置：
@@ -52,14 +65,31 @@ SHWGIJ_LOG_LEVEL="INFO"
 SHWGIJ_IMAGE_DELETE_DELAY=120
 # 缓存文件保留天数
 SHWGIJ_CACHE_EXPIRE_DAYS=7
+
+# Ollama配置（可选，如果需要使用聊天功能）
+OLLAMA_API_KEY="您的Ollama API密钥（如果有）"
 ```
 
 ## 使用说明
 
-- `/文字黄历` 或 `@机器人 文字黄历` 获取文本版黄历
-- `/黄历` 获取网页截图版黄历
-- `/新闻图片` 获取热榜新闻图片
-- `/测试黄历` 测试插件功能
+### 黄历功能
+- 文本版黄历：发送 `文字黄历` 或 `文本黄历`（无需 `/` 前缀）
+- 图片版黄历：发送 `黄历`（无需 `/` 前缀）
+- 兼容原有命令格式：`/文字黄历`、`@机器人 文字黄历`、`/黄历` 仍然可用
+
+### 新闻功能
+- 热榜新闻图片：发送 `/新闻图片` 获取今日热榜新闻图片
+
+### 帮助功能
+- 获取所有命令帮助：发送 `帮助`、`插件帮助` 或 `xihelp`（无需 `/` 前缀），或使用 `/帮助`、`/插件帮助`、`/xihelp`
+
+### 测试功能
+- 插件功能测试：发送 `/测试黄历` 测试插件功能
+
+### Ollama聊天功能（扩展功能）
+**注意：使用此功能前请先安装Ollama依赖** (`pip install ollama`)
+- 清理对话历史：发送 `/清理历史` 或 `/重置对话`
+- 更多Ollama相关命令请参考插件内部实现
 
 ## 许可证
 
