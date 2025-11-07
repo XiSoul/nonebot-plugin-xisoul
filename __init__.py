@@ -4,6 +4,7 @@ from . import lunar_text
 from . import lunar_image
 from . import lunar_news  # 导入新闻功能模块
 from . import ollama_chat  # 导入Ollama聊天功能模块
+from . import random_images  # 导入随机图片功能模块
 from nonebot import on_command, on_message, get_driver, logger
 from nonebot.adapters.onebot.v11 import Bot, Event
 from nonebot.plugin import PluginMetadata
@@ -11,8 +12,8 @@ from datetime import datetime
 
 __plugin_meta__ = PluginMetadata(
     name="XiSoul 农历黄历",
-    description="获取当天的农历黄历信息和实时新闻，包含详细的传统命理、民俗数据和热榜新闻图片",
-    usage="/文字黄历 或 @机器人 文字黄历 获取文本版\n/黄历 获取网页截图版\n/新闻图片 获取热榜新闻图片\n/测试黄历 测试插件功能",
+    description="获取当天的农历黄历信息、实时新闻和随机图片，包含详细的传统命理、民俗数据、热榜新闻图片和多种类型随机图片",
+    usage="/文字黄历 或 @机器人 文字黄历 获取文本版\n/黄历 获取网页截图版\n/新闻图片 获取热榜新闻图片\n/测试黄历 测试插件功能\nsjbs/sjhs/sjmt/sjecy/sjsk 获取各类随机图片",
     type="application",
     homepage="https://github.com/xisoul/nonebot-plugin-xisoul",  # 更新为连字符版本
     supported_adapters=["nonebot.adapters.onebot.v11"],

@@ -25,7 +25,7 @@ except ImportError:
 __plugin_meta__ = PluginMetadata(
     name="Ollama云模型聊天",
     description="使用Ollama云模型进行聊天，支持切换不同模型",
-    usage="@机器人 发送消息进行聊天\n/切换千问 切换到qwen3-coder:480b-cloud模型\n/切换gpt 切换到gpt-oss:120b-cloud模型\n/切换deepseek 切换到deepseek-v3.1:671b-cloud模型\n/当前模型 查看当前使用的模型",
+    usage="ai + 问题内容 (自动识别，不需要@机器人)\n@机器人 /切换千问 - 切换到千问模型\n@机器人 /切换gpt - 切换到GPT模型\n@机器人 /切换deepseek - 切换到DeepSeek模型\n@机器人 /当前模型 - 查看当前使用的模型",
 )
 
 # 从环境变量获取配置
@@ -41,17 +41,31 @@ conversation_histories = {}
 # Ollama API主机地址
 OLLAMA_HOST = "https://ollama.com"
 
+# 定义自定义规则函数，识别以"ai"开头的消息
+# 图片命令列表
+IMAGE_COMMANDS = ["sjbs", "sjhs", "sjmt", "sjecy", "sjsk"]
+
+def is_image_command(message: str) -> bool:
+    """检查消息是否为图片命令"""
+    message = message.strip().lower()
+    # 检查直接命令或带斜杠前缀的命令
+    return message in IMAGE_COMMANDS or message.lstrip('/') in IMAGE_COMMANDS
+
+def is_ai_prefix(message: str) -> bool:
+    """检查消息是否以"ai+空格"开头"""
+    return message.strip().lower().startswith("ai ")
+
 # 在文件顶部的命令定义部分添加新命令
 # 命令定义
-switch_qwen = on_command("切换千问", priority=10, block=True)
-switch_gpt = on_command("切换gpt", priority=10, block=True)
-switch_deepseek = on_command("切换deepseek", priority=10, block=True)
-show_current_model = on_command("当前模型", priority=10, block=True)
-model_list = on_command("模型列表", priority=10, block=True)
-ollama_help = on_command("ollama帮助", aliases={"Ollama帮助", "ollama菜单", "Ollama菜单"}, priority=10, block=True)
+switch_qwen = on_command("切换千问", rule=to_me(), priority=10, block=True)
+switch_gpt = on_command("切换gpt", rule=to_me(), priority=10, block=True)
+switch_deepseek = on_command("切换deepseek", rule=to_me(), priority=10, block=True)
+show_current_model = on_command("当前模型", rule=to_me(), priority=10, block=True)
+model_list = on_command("模型列表", rule=to_me(), priority=10, block=True)
+ollama_help = on_command("ollama帮助", aliases={"Ollama帮助", "ollama菜单", "Ollama菜单"}, rule=to_me(), priority=10, block=True)
 
-# 聊天消息处理
-ollama_chat = on_message(rule=to_me(), priority=15, block=False)
+# 聊天消息处理 - 修改为识别"ai"前缀
+ollama_chat = on_message(priority=15, block=False)
 
 # 可用模型列表
 available_models = [
@@ -77,15 +91,15 @@ async def handle_ollama_help(bot: Bot, event: Event):
     """显示Ollama聊天插件的帮助菜单"""
     response = "🤖 **Ollama聊天插件帮助菜单**\n\n"
     response += "📝 **聊天功能**\n"
-    response += "@机器人 + 消息内容\n\n"
+    response += "ai + 问题内容 (自动识别，不需要@机器人)\n\n"
     
     response += "🔄 **模型管理**\n"
-    response += "/切换千问 - 切换到千问模型\n"
-    response += "/切换gpt - 切换到GPT模型\n"
-    response += "/切换deepseek - 切换到DeepSeek模型\n"
-    response += "/当前模型 - 查看当前使用的模型\n"
-    response += "/模型列表 - 查看所有可用模型\n"
-    response += "/重置模型 - 重置到默认模型\n\n"
+    response += "@机器人 /切换千问 - 切换到千问模型\n"
+    response += "@机器人 /切换gpt - 切换到GPT模型\n"
+    response += "@机器人 /切换deepseek - 切换到DeepSeek模型\n"
+    response += "@机器人 /当前模型 - 查看当前使用的模型\n"
+    response += "@机器人 /模型列表 - 查看所有可用模型\n"
+    response += "@机器人 /重置模型 - 重置到默认模型\n\n"
     
     response += "🧹 **对话管理**\n"
     response += "/清理对话 - 清理您的对话历史\n"
@@ -133,11 +147,25 @@ async def handle_show_current_model(bot: Bot, event: Event):
 @ollama_chat.handle()
 async def handle_ollama_chat(bot: Bot, event: Event):
     """处理聊天消息"""
-    # 获取用户发送的消息，去除@机器人的部分
+    # 获取用户发送的消息
     message = str(event.message)
-    # 如果消息为空或仅包含命令，不处理
-    if not message or message.strip() in ["清理", "重置"]:
+    message_text = message.strip()
+    
+    # 优先检查是否为图片命令，如果是则不处理
+    if is_image_command(message_text):
         return
+    
+    # 检查消息是否以"ai+空格"开头
+    if not is_ai_prefix(message_text):
+        return
+    
+    # 提取实际问题（移除"ai "前缀，注意包含空格）
+    question = message_text[3:].strip()
+    # 如果移除前缀后消息为空，不处理
+    if not question:
+        return
+    
+    logger.info(f"收到AI问题: {question}")
     
     # 获取用户ID
     user_id = event.get_user_id()
@@ -148,10 +176,10 @@ async def handle_ollama_chat(bot: Bot, event: Event):
         logger.info(f"初始化用户 {user_id} 的对话历史")
     
     try:
-        logger.info(f"收到用户 {user_id} 的消息: {message}")
+        logger.info(f"收到用户 {user_id} 的AI问题: {question}")
         
         # 调用Ollama API获取回复
-        response_text = await get_ollama_response(message, user_id)
+        response_text = await get_ollama_response(question, user_id)
         
         if response_text:
             logger.info(f"获取Ollama回复成功，用户 {user_id}")

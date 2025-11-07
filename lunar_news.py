@@ -496,9 +496,10 @@ async def send_news_image_to_groups():
         current_time = today.strftime("%Y-%m-%d %H:%M:%S")
         logger.info(f"当前时间: {current_time}")
         
-        if today.weekday() >= 5:  # 0=周一, 1=周二, ..., 5=周六, 6=周日
-            logger.info(f"今天是{today.strftime('%Y-%m-%d')}，休息日，不发送新闻")
-            return
+        # 删除以下两行休息日判断代码
+        # if today.weekday() >= 5:  # 0=周一, 1=周二, ..., 5=周六, 6=周日
+        #     logger.info(f"今天是{today.strftime('%Y-%m-%d')}，休息日，不发送新闻")
+        #     return
 
         # 确保缓存目录存在
         os.makedirs(CACHE_DIR, exist_ok=True)
