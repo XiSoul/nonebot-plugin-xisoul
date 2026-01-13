@@ -1,16 +1,12 @@
+"""随机图片获取核心功能 - 仅提供功能函数，命令已移至__init__.py"""
+
 import asyncio
 import os
+import io
 import httpx
 from datetime import datetime
-from nonebot import on_command, on_message, logger
+from nonebot import logger
 from nonebot.adapters.onebot.v11 import Bot, Event, MessageSegment
-from nonebot.plugin import PluginMetadata
-
-__plugin_meta__ = PluginMetadata(
-    name="随机图片",
-    description="获取各种类型的随机图片，包括白丝、黑丝、随机美图、二次元和4K美女高青图片",
-    usage="sjbs - 随机白丝\nsjhs - 随机黑丝\nsjmt - 随机美图\nsjecy - 二次元图片\nsjsk - 4K美女高青图片",
-)
 
 # 图片API基础URL
 BASE_URL = "https://api.yviii.com/img/"
@@ -26,23 +22,36 @@ IMAGE_TYPES = {
 
 # 创建临时目录
 async def create_temp_directory():
-    """创建临时文件目录，确保在Docker环境中正常工作"""
-    temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
-    temp_dir = os.path.abspath(temp_dir)
-    
-    if not os.path.exists(temp_dir):
+    """创建临时文件目录，根据不同操作系统和环境选择最佳存储位置"""
+    try:
+        import tempfile
+        base_temp_dir = tempfile.gettempdir()
+        temp_dir = os.path.join(base_temp_dir, "nonebot_xisoul_temp")
+        
+        temp_dir = os.path.abspath(temp_dir)
+        
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir, exist_ok=True)
+            logger.info(f"在系统临时目录创建临时文件夹成功: {temp_dir}")
+        
+        return temp_dir
+    except Exception as e:
+        logger.warning(f"使用系统临时目录失败: {str(e)}，尝试使用插件目录")
+        
         try:
-            os.makedirs(temp_dir, exist_ok=True)
-            logger.info(f"创建临时目录成功: {temp_dir}")
-        except Exception as e:
-            logger.error(f"创建临时目录失败: {str(e)}")
-            # 尝试使用系统临时目录作为备选
-            import tempfile
-            temp_dir = os.path.join(tempfile.gettempdir(), "nonebot_xisoul_temp")
-            os.makedirs(temp_dir, exist_ok=True)
-            logger.info(f"使用系统临时目录作为备选: {temp_dir}")
-    
-    return temp_dir
+            temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
+            temp_dir = os.path.abspath(temp_dir)
+            
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir, exist_ok=True)
+                logger.info(f"在插件目录创建临时文件夹成功: {temp_dir}")
+            
+            return temp_dir
+        except Exception as e2:
+            logger.error(f"创建临时目录失败: {str(e2)}")
+            fallback_dir = os.path.abspath(os.getcwd())
+            logger.warning(f"使用当前工作目录作为最后的备选: {fallback_dir}")
+            return fallback_dir
 
 # 生成唯一文件名
 async def generate_unique_filename(image_type):
@@ -69,13 +78,10 @@ async def download_image(image_type, save_path):
             
             response = await client.get(url, headers=headers, follow_redirects=True)
             
-            # 检查响应状态
             if response.status_code == 200:
-                # 检查内容类型是否为图片
                 content_type = response.headers.get("content-type", "")
                 
                 if any(ctype in content_type.lower() for ctype in ["image", "jpeg", "png", "gif", "webp"]):
-                    # 保存图片
                     with open(save_path, "wb") as f:
                         f.write(response.content)
                     
@@ -104,7 +110,6 @@ async def delete_temp_file(file_path, delay=60):
 # 处理图片请求
 async def handle_image_request(bot: Bot, event: Event, image_type: str):
     """处理图片请求"""
-    # 检查图片类型是否存在
     if image_type not in IMAGE_TYPES:
         logger.error(f"未知的图片类型: {image_type}")
         await bot.send(event, "❌ 未知的图片类型")
@@ -113,37 +118,23 @@ async def handle_image_request(bot: Bot, event: Event, image_type: str):
     desc = IMAGE_TYPES[image_type]["description"]
     
     try:
-        # 生成保存路径
         save_path = await generate_unique_filename(image_type)
         
-        # 下载图片
         if await download_image(image_type, save_path):
-            # 检查文件是否存在且大小大于0
             if os.path.exists(save_path):
                 file_size = os.path.getsize(save_path)
                 
                 if file_size > 0:
-                            try:
-                                # 尝试方式1: 直接使用绝对路径
-                                await bot.send(event, MessageSegment.image(save_path))
-                            except Exception as e1:
-                                logger.warning(f"方式1发送失败，尝试方式2: {str(e1)}")
-                                try:
-                                    # 尝试方式2: 使用file:///前缀
-                                    file_url = f"file:///{save_path}"
-                                    await bot.send(event, MessageSegment.image(file_url))
-                                except Exception as e2:
-                                    logger.warning(f"方式2发送失败，尝试方式3: {str(e2)}")
-                                    try:
-                                        # 尝试方式3: 使用相对路径
-                                        relative_path = os.path.relpath(save_path)
-                                        await bot.send(event, MessageSegment.image(relative_path))
-                                    except Exception as e3:
-                                        logger.error(f"所有发送方式都失败: {str(e3)}")
-                                        await bot.send(event, f"❌ 图片发送失败: {type(e3).__name__}")
-                else:
-                    logger.error(f"图片文件为空: {save_path}")
-                    await bot.send(event, f"❌ {desc}下载失败，文件内容为空")
+                    try:
+                        with open(save_path, 'rb') as f:
+                            image_bytes = f.read()
+                        await bot.send(event, MessageSegment.image(image_bytes))
+                        logger.info(f"{desc}图片已成功发送")
+                    except Exception as e:
+                        logger.error(f"发送图片失败: {str(e)}")
+                        await bot.send(event, f"❌ {desc}图片发送失败，请稍后重试")
+                    finally:
+                        asyncio.create_task(delete_temp_file(save_path, delay=60))
             else:
                 logger.error(f"图片文件不存在: {save_path}")
                 await bot.send(event, f"❌ {desc}下载失败，文件不存在")
@@ -154,40 +145,4 @@ async def handle_image_request(bot: Bot, event: Event, image_type: str):
         logger.error(f"获取{desc}时发生错误: 类型={type(e).__name__}, 详情={str(e)}")
         await bot.send(event, f"❌ 获取{desc}失败，请稍后重试。错误信息: {type(e).__name__}")
 
-# 定义消息规则
-async def is_image_command(event: Event) -> bool:
-    """检查是否为图片命令，支持直接命令和带斜杠前缀的命令"""
-    message = str(event.message).strip()
-    # 检查直接命令或带斜杠前缀的命令
-    return message in IMAGE_TYPES.keys() or message.lstrip('/') in IMAGE_TYPES.keys()
-
-# 创建直接消息处理器
-image_direct = on_message(rule=is_image_command, priority=10, block=True)
-
-# 创建命令处理器
-command_handlers = {}
-for image_type in IMAGE_TYPES.keys():
-    command_handlers[image_type] = on_command(image_type, priority=10, block=True)
-    
-    # 动态定义处理函数
-    def create_handler(img_type=image_type):
-        async def handler(bot: Bot, event: Event):
-            await handle_image_request(bot, event, img_type)
-        return handler
-    
-    # 注册处理函数
-    command_handlers[image_type].handle()(create_handler())
-
-# 处理直接消息
-@image_direct.handle()
-async def handle_direct_image(bot: Bot, event: Event):
-    """处理直接消息中的图片命令"""
-    message = str(event.message).strip()
-    # 移除可能的斜杠前缀
-    clean_message = message.lstrip('/')
-    
-    if clean_message in IMAGE_TYPES.keys():
-        await handle_image_request(bot, event, clean_message)
-
-# 初始化日志
-logger.info("随机图片插件已加载")
+logger.info("[随机图片] 核心功能加载完成，命令已移至__init__.py")

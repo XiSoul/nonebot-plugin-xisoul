@@ -1,6 +1,6 @@
 import os
 import asyncio
-import os  # 需要导入os模块用于创建目录
+import io  # 导入io模块用于内存操作
 from datetime import datetime
 from nonebot import on_command, on_message, logger
 from nonebot.adapters.onebot.v11 import Bot, Event, MessageSegment
@@ -14,6 +14,7 @@ from nonebot_plugin_htmlrender import get_new_page
 # 定义图片黄历规则
 async def is_image_lunar_command(event: Event) -> bool:
     message = str(event.message).strip()
+    # 只处理纯"hl"消息，带参数的消息由lunar_calendar_by_date.py处理
     return message == "hl"
 
 __plugin_meta__ = PluginMetadata(
@@ -23,34 +24,47 @@ __plugin_meta__ = PluginMetadata(
 )
 
 # 命令定义
-# 移除汉字命令，只保留hl命令，避免误触发
-image_lunar_hl = on_command("hl", priority=10, block=True)
-# 添加新的不需要/的命令
-image_lunar_direct = on_message(rule=is_image_lunar_command, priority=10, block=True)
+# 移除on_command处理器，避免与lunar_calendar_by_date.py中的hl_command冲突
+# 只保留on_message处理器处理纯"hl"消息
+image_lunar_direct = on_message(rule=is_image_lunar_command, priority=15, block=True)
 
 def create_temp_directory(temp_dir=None):
-    """创建临时文件目录，优先使用系统临时目录，确保在Docker环境中正常工作"""
-    # 如果没有指定temp_dir，使用系统临时目录
-    if temp_dir is None:
-        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
-    
-    # 确保使用绝对路径
-    temp_dir = os.path.abspath(temp_dir)
-    
-    # 创建目录（包括所有中间目录）
-    if not os.path.exists(temp_dir):
+    """创建临时文件目录，根据不同操作系统和环境选择最佳存储位置"""
+    # 尝试使用操作系统的环境变量或配置来确定最佳存储位置
+    try:
+        # 首先尝试使用系统临时目录（适用于所有平台）
+        import tempfile
+        base_temp_dir = tempfile.gettempdir()
+        temp_dir = os.path.join(base_temp_dir, "nonebot_xisoul_temp")
+        
+        # 确保使用绝对路径
+        temp_dir = os.path.abspath(temp_dir)
+        
+        # 创建目录（包括所有中间目录）
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir, exist_ok=True)
+            logger.info(f"在系统临时目录创建临时文件夹成功: {temp_dir}")
+        
+        return temp_dir
+    except Exception as e:
+        logger.warning(f"使用系统临时目录失败: {str(e)}，尝试使用插件目录")
+        
+        # 如果系统临时目录失败，尝试使用插件目录下的temp文件夹
         try:
-            os.makedirs(temp_dir, exist_ok=True)
-            logger.info(f"创建临时目录成功: {temp_dir}")
-        except Exception as e:
-            logger.error(f"创建临时目录失败: {str(e)}")
-            # 尝试使用系统临时目录作为备选
-            import tempfile
-            temp_dir = os.path.join(tempfile.gettempdir(), "nonebot_xisoul_temp")
-            os.makedirs(temp_dir, exist_ok=True)
-            logger.info(f"使用系统临时目录作为备选: {temp_dir}")
-    
-    return temp_dir
+            temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
+            temp_dir = os.path.abspath(temp_dir)
+            
+            if not os.path.exists(temp_dir):
+                os.makedirs(temp_dir, exist_ok=True)
+                logger.info(f"在插件目录创建临时文件夹成功: {temp_dir}")
+            
+            return temp_dir
+        except Exception as e2:
+            logger.error(f"创建临时目录失败: {str(e2)}")
+            # 最后返回当前工作目录作为最后的备选
+            fallback_dir = os.path.abspath(os.getcwd())
+            logger.warning(f"使用当前工作目录作为最后的备选: {fallback_dir}")
+            return fallback_dir
 
 def generate_unique_filename(temp_dir=None, prefix="huangli_", ext=".png"):
     """生成唯一的文件名，确保使用绝对路径"""
@@ -64,14 +78,10 @@ def generate_unique_filename(temp_dir=None, prefix="huangli_", ext=".png"):
     logger.debug(f"生成的文件路径: {unique_filename}")
     return unique_filename
 
-@image_lunar_hl.handle()
-@image_lunar_direct.handle()
 async def handle_image_lunar(bot: Bot, event: Event):
     """处理图片黄历命令"""
-    logger.info("收到图片黄历命令请求")
-    
-    # 发送提示消息告知用户正在获取截图
-    await bot.send(event, "正在获取今日黄历图片，请稍候...")
+    message = str(event.message).strip()
+    logger.info(f"收到图片黄历命令请求: {message}")
     
     try:
         # 生成唯一的文件名（内部已处理目录创建）
@@ -86,18 +96,21 @@ async def handle_image_lunar(bot: Bot, event: Event):
         if os.path.exists(image_path) and os.path.getsize(image_path) > 0:
             logger.info(f"截图文件大小: {os.path.getsize(image_path)} bytes")
             
-            # 针对Docker环境优化发送方式
+            # 针对Docker环境优化：使用BytesIO从内存读取图片并发送，避免路径映射问题
             try:
-                # 先尝试不使用file:///前缀
-                await bot.send(event, MessageSegment.image(os.path.abspath(image_path)))
-                logger.info("黄历图片已发送（直接路径）")
-            except Exception:
-                # 如果失败，再尝试使用file:///前缀
-                await bot.send(event, MessageSegment.image("file:///" + os.path.abspath(image_path)))
-                logger.info("黄历图片已发送（带file:///前缀）")
-            
-            # 延迟删除临时文件，避免占用过多磁盘空间
-            asyncio.create_task(delete_temp_file(image_path, delay=60))
+                # 从文件读取图片数据到内存
+                with open(image_path, 'rb') as f:
+                    image_bytes = f.read()
+                
+                # 使用bytes模式发送图片
+                await bot.send(event, MessageSegment.image(image_bytes))
+                logger.info("黄历图片已发送（内存读取方式）")
+            except Exception as e:
+                logger.error(f"发送图片失败: {str(e)}")
+                await bot.send(event, "❌ 发送黄历图片失败，请稍后重试")
+            finally:
+                # 延迟删除临时文件，避免占用过多磁盘空间
+                asyncio.create_task(delete_temp_file(image_path, delay=60))
         else:
             await bot.send(event, "❌ 截图失败，无法获取黄历图片")
             logger.error("黄历截图文件不存在或为空")
@@ -108,6 +121,12 @@ async def handle_image_lunar(bot: Bot, event: Event):
         await bot.send(event, error_msg)
         # 详细错误记录到日志
         logger.exception("获取黄历图片时发生异常:")
+
+@image_lunar_direct.handle()
+async def handle_image_lunar_direct(bot: Bot, event: Event):
+    """处理直接发送的图片黄历命令"""
+    # 这个处理器只处理纯"hl"消息，由is_image_lunar_command规则保证
+    await handle_image_lunar(bot, event)
 
 async def take_huangli_screenshot(image_path):
     """使用nonebot-plugin-htmlrender的异步截图函数"""

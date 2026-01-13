@@ -283,13 +283,16 @@ async def get_news_image():
     current_date = datetime.now().date()
     today_cache_file = get_today_cache_file()
     
-    # 检查是否有当天缓存的图片
+    # 检查内存缓存
     if cached_image_data and cached_image_date == current_date:
         log_debug("使用内存缓存的新闻图片")
         return cached_image_data
+    else:
+        # 缓存过期或不存在，重置内存缓存状态
+        cached_image_data = None
+        cached_image_date = None
     
-    # 修改缓存检查逻辑，添加删除过期缓存的功能
-    # 检查是否有当天的本地缓存文件
+    # 检查本地缓存文件
     if os.path.exists(today_cache_file):
         try:
             # 获取文件的修改日期
@@ -416,13 +419,18 @@ async def get_news_image():
                         # API返回错误时的缓存使用逻辑
                         error_msg = data.get('msg', '未知错误')
                         logger.error(f"API返回错误: {error_msg}")
-                        # 尝试使用最新的缓存（如果有）
+                        # 尝试使用最新的缓存，但只使用当天的缓存
                         latest_cache_file = find_latest_cache_file()
                         if latest_cache_file:
                             try:
-                                logger.info("尝试使用缓存的图片")
-                                with open(latest_cache_file, "rb") as f:
-                                    return f.read()
+                                # 检查缓存文件是否为当天的
+                                file_modify_time = datetime.fromtimestamp(os.path.getmtime(latest_cache_file)).date()
+                                if file_modify_time == current_date:
+                                    logger.info("尝试使用当天的缓存图片")
+                                    with open(latest_cache_file, "rb") as f:
+                                        return f.read()
+                                else:
+                                    logger.warning("没有当天的缓存图片，不使用过期缓存")
                             except Exception as e:
                                 logger.warning(f"读取缓存图片失败: {str(e)}")
                 except json.JSONDecodeError:

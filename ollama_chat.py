@@ -1,20 +1,15 @@
-"""Ollama云模型聊天插件"""
+"""Ollama云模型聊天核心功能 - 仅提供功能函数，命令已移至__init__.py"""
 
 import json
 import asyncio
-from datetime import datetime
-from nonebot import on_command, on_message, get_driver, logger
-from nonebot.adapters.onebot.v11 import Bot, Event, MessageSegment
-from nonebot.rule import to_me
-from nonebot.permission import SUPERUSER
-from nonebot.plugin import PluginMetadata
+from nonebot import get_driver, logger
 
-# 导入Ollama的Python客户端库 - 这是官方推荐的调用方式
+# 导入Ollama的Python客户端库
 try:
     from ollama import Client
 except ImportError:
     logger.error("未安装ollama Python库，请运行: pip install ollama")
-    # 为了防止导入失败导致整个插件无法加载，创建一个模拟的Client类
+    # 创建一个模拟的Client类
     class Client:
         def __init__(self, host=None, headers=None):
             self.host = host
@@ -22,50 +17,25 @@ except ImportError:
         def chat(self, model, messages, stream=False):
             raise ImportError("未安装ollama Python库")
 
-__plugin_meta__ = PluginMetadata(
-    name="Ollama云模型聊天",
-    description="使用Ollama云模型进行聊天，支持切换不同模型",
-    usage="ai + 问题内容 (自动识别，不需要@机器人)\n@机器人 /切换千问 - 切换到千问模型\n@机器人 /切换gpt - 切换到GPT模型\n@机器人 /切换deepseek - 切换到DeepSeek模型\n@机器人 /当前模型 - 查看当前使用的模型",
-)
+# 导入必要的NoneBot类型
+try:
+    from nonebot.adapters.onebot.v11 import Bot, Event
+except ImportError:
+    logger.warning("未导入Bot和Event类型，将使用动态类型")
+    Bot = None
+    Event = None
 
 # 从环境变量获取配置
 config = get_driver().config
 ollama_api_key = getattr(config, "ollama_api_key", "")
 
-# 默认模型 - 根据官方文档，云端模型需要带-cloud后缀
-DEFAULT_MODEL = "qwen3-coder:480b-cloud"
-# 当前使用的模型
-current_model = DEFAULT_MODEL
-# 对话历史缓存
-conversation_histories = {}
 # Ollama API主机地址
 OLLAMA_HOST = "https://ollama.com"
 
-# 定义自定义规则函数，识别以"ai"开头的消息
-# 图片命令列表
-IMAGE_COMMANDS = ["sjbs", "sjhs", "sjmt", "sjecy", "sjsk"]
-
-def is_image_command(message: str) -> bool:
-    """检查消息是否为图片命令"""
-    message = message.strip().lower()
-    # 检查直接命令或带斜杠前缀的命令
-    return message in IMAGE_COMMANDS or message.lstrip('/') in IMAGE_COMMANDS
-
-def is_ai_prefix(message: str) -> bool:
-    """检查消息是否以"ai+空格"开头"""
-    return message.strip().lower().startswith("ai ")
-
-# 在文件顶部的命令定义部分添加新命令
-# 命令定义
-switch_qwen = on_command("切换千问", rule=to_me(), priority=10, block=True)
-switch_gpt = on_command("切换gpt", rule=to_me(), priority=10, block=True)
-switch_deepseek = on_command("切换deepseek", rule=to_me(), priority=10, block=True)
-show_current_model = on_command("当前模型", rule=to_me(), priority=10, block=True)
-model_list = on_command("模型列表", rule=to_me(), priority=10, block=True)
-ollama_help = on_command("ollama帮助", aliases={"Ollama帮助", "ollama菜单", "Ollama菜单"}, rule=to_me(), priority=10, block=True)
-
-# 聊天消息处理 - 修改为识别"ai"前缀
-ollama_chat = on_message(priority=15, block=False)
+# 初始化必要的全局变量
+conversation_histories = {}
+DEFAULT_MODEL = "qwen3-coder:480b-cloud"
+current_model = DEFAULT_MODEL
 
 # 可用模型列表
 available_models = [
@@ -74,9 +44,17 @@ available_models = [
     {"name": "deepseek-v3.1:671b-cloud", "chinese_name": "DeepSeek", "description": "专业编程模型"}
 ]
 
-# 添加模型列表命令处理函数
-@model_list.handle()
-async def handle_model_list(bot: Bot, event: Event):
+def is_ai_prefix(message: str) -> bool:
+    """检查消息是否以"ai+空格"开头"""
+    return message.strip().lower().startswith("ai ")
+
+# 这个函数已被下面的新版本替代，保留注释
+
+logger.info("[Ollama] 核心功能加载完成，命令已移至__init__.py")
+
+# 注意：命令处理函数已移至__init__.py
+# 以下为功能函数，供__init__.py中的命令处理器调用
+async def handle_model_list(bot, event):
     """显示可用的模型列表"""
     response = "📋 **可用模型列表**\n\n"
     for i, model in enumerate(available_models, 1):
@@ -85,57 +63,60 @@ async def handle_model_list(bot: Bot, event: Event):
         response += f"   简介: {model['description']}\n\n"
     await bot.send(event, response)
 
-# 添加插件帮助菜单命令处理函数
-@ollama_help.handle()
-async def handle_ollama_help(bot: Bot, event: Event):
+async def handle_ollama_help(bot, event):
     """显示Ollama聊天插件的帮助菜单"""
-    response = "🤖 **Ollama聊天插件帮助菜单**\n\n"
-    response += "📝 **聊天功能**\n"
-    response += "ai + 问题内容 (自动识别，不需要@机器人)\n\n"
+    response = [
+        "🤖 **AI聊天功能详细帮助**",
+        "",
+        "📝 **基础聊天**",
+        "• ai + 问题内容 - 智能问答（自动识别，不需要@机器人）",
+        "• 示例：ai 你好，今天天气怎么样？",
+        "",
+        "🔄 **模型管理**",
+        "• 切换千问 - 切换到千问模型（高性能中文编码模型）",
+        "• 切换gpt - 切换到GPT模型（通用语言模型）",
+        "• 切换deepseek - 切换到DeepSeek模型（专业编程模型）",
+        "• 当前模型 - 查看当前使用的模型",
+        "• 模型列表 - 查看所有可用模型",
+        "• 重置模型 - 重置到默认模型（千问）",
+        "",
+        "🧹 **对话管理**",
+        "• 清理历史 - 清理您的对话历史（重置当前会话）",
+        "",
+        "💡 **使用提示**",
+        "• 所有命令支持直接发送或带/前缀发送",
+        "• 例如：'切换千问' 或 '/切换千问' 均可触发",
+        "• 模型切换后会自动应用于后续的所有对话",
+        "",
+        "🔧 **故障排除**",
+        "• 如果无法获取回复，请检查网络连接",
+        "• 输入错误或不支持的命令将不会触发响应"
+    ]
     
-    response += "🔄 **模型管理**\n"
-    response += "@机器人 /切换千问 - 切换到千问模型\n"
-    response += "@机器人 /切换gpt - 切换到GPT模型\n"
-    response += "@机器人 /切换deepseek - 切换到DeepSeek模型\n"
-    response += "@机器人 /当前模型 - 查看当前使用的模型\n"
-    response += "@机器人 /模型列表 - 查看所有可用模型\n"
-    response += "@机器人 /重置模型 - 重置到默认模型\n\n"
-    
-    response += "🧹 **对话管理**\n"
-    response += "/清理对话 - 清理您的对话历史\n"
-    response += "/清理对话 全部 - 超级用户清理所有对话历史\n\n"
-    
-    response += "ℹ️ **帮助信息**\n"
-    response += "/ollama帮助 - 显示此帮助菜单\n"
-    
-    await bot.send(event, response)
+    await bot.send(event, "\n".join(response))
 
-@switch_qwen.handle()
-async def handle_switch_qwen(bot: Bot, event: Event):
+async def handle_switch_qwen(bot, event):
     """切换到千问模型"""
     global current_model
     current_model = "qwen3-coder:480b-cloud"
     logger.info(f"模型已切换为: {current_model}")
     await bot.send(event, f"✅ 模型已切换为: 千问 (qwen3-coder:480b-cloud)")
 
-@switch_gpt.handle()
-async def handle_switch_gpt(bot: Bot, event: Event):
+async def handle_switch_gpt(bot, event):
     """切换到GPT模型"""
     global current_model
     current_model = "gpt-oss:120b-cloud"
     logger.info(f"模型已切换为: {current_model}")
     await bot.send(event, f"✅ 模型已切换为: GPT (gpt-oss:120b-cloud)")
 
-@switch_deepseek.handle()
-async def handle_switch_deepseek(bot: Bot, event: Event):
+async def handle_switch_deepseek(bot, event):
     """切换到DeepSeek模型"""
     global current_model
     current_model = "deepseek-v3.1:671b-cloud"
     logger.info(f"模型已切换为: {current_model}")
     await bot.send(event, f"✅ 模型已切换为: DeepSeek (deepseek-v3.1:671b-cloud)")
 
-@show_current_model.handle()
-async def handle_show_current_model(bot: Bot, event: Event):
+async def handle_show_current_model(bot, event):
     """显示当前使用的模型"""
     model_name = {
         "qwen3-coder:480b-cloud": "千问",
@@ -144,19 +125,29 @@ async def handle_show_current_model(bot: Bot, event: Event):
     }.get(current_model, current_model)
     await bot.send(event, f"当前使用的模型: {model_name} ({current_model})")
 
-@ollama_chat.handle()
-async def handle_ollama_chat(bot: Bot, event: Event):
+async def handle_ollama_chat(bot, event):
     """处理聊天消息"""
     # 获取用户发送的消息
     message = str(event.message)
     message_text = message.strip()
     
-    # 优先检查是否为图片命令，如果是则不处理
-    if is_image_command(message_text):
+    # 定义所有需要排除的命令关键词列表
+    COMMAND_KEYWORDS = [
+        "sjbs", "sjhs", "sjmt", "sjecy", "sjsk",  # 随机图片命令
+        "切换千问", "切换gpt", "切换deepseek",    # 模型切换命令
+        "当前模型", "模型列表", "ollama帮助",      # 模型信息命令
+        "清理历史", "重置模型",                    # 对话管理命令
+        "帮助", "测试黄历"                          # 其他命令
+    ]
+    
+    # 检查消息是否为任何已注册的命令，如果是则不处理，让命令处理器处理
+    if message_text in COMMAND_KEYWORDS:
+        logger.info(f"消息'{message_text}'被识别为命令，跳过处理，交给命令处理器")
         return
     
     # 检查消息是否以"ai+空格"开头
     if not is_ai_prefix(message_text):
+        logger.info(f"消息'{message_text}'不以'ai '开头，跳过处理")
         return
     
     # 提取实际问题（移除"ai "前缀，注意包含空格）
@@ -255,11 +246,9 @@ async def get_ollama_response(message: str, user_id: str) -> str:
         else:
             return f"❌ API调用错误: {str(e)}"
 
-# 清理对话历史的命令
-clear_history = on_command("清理历史", aliases={"重置对话"}, priority=10, block=True)
+# 清理对话历史命令已在上方定义
 
-@clear_history.handle()
-async def handle_clear_history(bot: Bot, event: Event):
+async def handle_clear_history(bot, event):
     """清理指定用户的对话历史"""
     # 获取用户ID
     user_id = event.get_user_id()
@@ -295,11 +284,9 @@ async def handle_clear_history(bot: Bot, event: Event):
         else:
             await bot.send(event, f"❌ 用户 {target_user_id} 没有对话历史可以清理")
 
-# 重置模型到默认值的命令
-reset_model = on_command("重置模型", priority=10, block=True)
+# 重置模型命令已在上方定义
 
-@reset_model.handle()
-async def handle_reset_model(bot: Bot, event: Event):
+async def handle_reset_model(bot, event):
     """重置模型到默认值"""
     global current_model
     current_model = DEFAULT_MODEL
