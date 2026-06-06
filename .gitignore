@@ -1,6 +1,2 @@
 /cache
 /temp
-__pycache__/
-*.pyc
-.deps_installed
-ai_chat.db
